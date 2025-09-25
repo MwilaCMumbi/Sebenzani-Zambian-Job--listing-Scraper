@@ -5,7 +5,7 @@
 It demonstrates robust server-side logic (Scraping/Backend) and a dynamic, user-friendly client-side interface (Frontend).
 
 ## 🌍 Live Application
-✨ **See the Sebenzani Job Portal Live:** [https://sites.google.com/view/sebenzani-com/home](https://sites.google.com/view/sebenzani-com/home)
+✨ **See the Sebenzani Job Portal Live:** https://sites.google.com/view/sebenzani-com/home](https://sites.google.com/view/sebenzani-com/home
 
 ***
 
@@ -41,3 +41,4 @@ To be transparent, I utilized **Google's Studio Bot (AI)** as a development part
 4.  Create a file named `appsscript.json` (if not already visible) and paste the content from this repo.
 5.  Run the `runAllScrapers()` function once to populate the "Jobs" sheet.
 6.  **Deploy** the script as a Web App to view the live result.
+
