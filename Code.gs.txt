@@ -1,0 +1,63 @@
+/**
+ * =================================================================
+ * Sebenzani Final Engine - Backend (Code.gs) - FINAL OPTIMAL SOLUTION
+ * =================================================================
+ * This version implements the user's proposed optimal solution:
+ * 1. Share links go to the standalone app's Job.html view.
+ * 2. The "Back" button on Job.html redirects to the main Google Site.
+ */
+
+// This is the URL for the "Back to All Jobs" button.
+const GOOGLE_SITES_URL = "https://sites.google.com/view/sebenzani-com/home";
+
+function doGet(e) {
+  // Check if a 'job' parameter exists in the URL
+  if (e.parameter && e.parameter.job) {
+    // If yes, serve the dedicated Job.html landing page.
+    const jobId = e.parameter.job;
+    const jobData = getJobById(jobId);
+
+    if (jobData) {
+      const template = HtmlService.createTemplateFromFile('Job');
+      template.jobTitle = jobData[0];
+      template.company = jobData[1];
+      template.location = jobData[2];
+      const urlMatch = jobData[3].match(/=HYPERLINK\("([^"]+)"/);
+      template.jobUrl = urlMatch ? urlMatch[1] : '#';
+      template.datePosted = jobData[4];
+      // CRITICAL: The "Back" button URL is set to the Google Site
+      template.mainAppUrl = GOOGLE_SITES_URL;
+      return template.evaluate().setTitle(jobData[0] + " | Sebenzani.com");
+    } else {
+      // If the job ID is invalid, show a "not found" page that still links back to the Google Site
+      const template = HtmlService.createTemplateFromFile('Job');
+      template.jobTitle = "Job Not Found";
+      template.company = "This listing may have been removed.";
+      template.location = "N/A";
+      template.jobUrl = GOOGLE_SITES_URL;
+      template.datePosted = "N/A";
+      template.mainAppUrl = GOOGLE_SITES_URL;
+      return template.evaluate().setTitle("Job Not Found | Sebenzani.com");
+    }
+  } else {
+    // If no 'job' parameter, serve the main app (Index.html).
+    return HtmlService.createHtmlOutputFromFile('Index')
+      .setTitle("Sebenzani.com - Zambian Job Portal")
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  }
+}
+
+// This function is called by Index.html to create the shareable links.
+// It correctly returns the script's own URL.
+function getWebAppUrl() {
+  return ScriptApp.getService().getUrl();
+}
+
+// All other functions are correct and remain unchanged.
+function getInitialData() { const user = getSessionUser(); const content = getPageContent(); const jobs = getJobData(user.isLoggedIn); return { jobs: jobs, content: content, user: user }; }
+function getJobById(jobId) { try { const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Jobs"); if (!sheet || sheet.getLastRow() < 2) return null; const range = sheet.getRange(2, 1, sheet.getLastRow() - 1, 6); const data = range.getValues(); const formulas = range.getFormulasR1C1(); for (let i = 0; i < data.length; i++) { if (data[i][5] && data[i][5].toString() === jobId.toString()) { if (formulas[i] && formulas[i][3]) { data[i][3] = formulas[i][3]; } return data[i]; } } return null; } catch (e) { console.error("Error in getJobById: " + e.stack); return null; } }
+function getMoreJobs(offset) { try { const ss = SpreadsheetApp.getActiveSpreadsheet(); const sheet = ss.getSheetByName("Jobs"); if (!sheet || sheet.getLastRow() < 2) return []; const BATCH_SIZE = 5; const range = sheet.getRange(2, 1, sheet.getLastRow() - 1, 6); const values = range.getValues(); const formulas = range.getFormulasR1C1(); for (let i = 0; i < values.length; i++) { if (formulas[i] && formulas[i][3]) { values[i][3] = formulas[i][3]; } } const reversedJobs = values.reverse(); return reversedJobs.slice(offset, offset + BATCH_SIZE); } catch (e) { console.error("Error in getMoreJobs: " + e.stack); return []; } }
+function getJobData(isLoggedIn) { try { const ss = SpreadsheetApp.getActiveSpreadsheet(); const sheet = ss.getSheetByName("Jobs"); if (!sheet || sheet.getLastRow() < 2) return []; const range = sheet.getRange(2, 1, sheet.getLastRow() - 1, 6); const values = range.getValues(); const formulas = range.getFormulasR1C1(); for (let i = 0; i < values.length; i++) { if (formulas[i] && formulas[i][3]) { values[i][3] = formulas[i][3]; } } if (isLoggedIn) { return values; } else { return values.reverse().slice(0, 5); } } catch (e) { console.error("Error in getJobData: " + e.stack); return []; } }
+function runAllScrapers() { console.log("Scraper process started."); const ss = SpreadsheetApp.getActiveSpreadsheet(); const jobsSheet = ss.getSheetByName("Jobs"); if (!jobsSheet) { console.error("CRITICAL ERROR: 'Jobs' sheet not found."); return; } const searchUrl = "https://www.linkedin.com/jobs/jobs-in-zambia?f_TPR=r604800"; const params = { 'headers': { 'Accept-Language': 'en-US,en;q=0.9' }, 'muteHttpExceptions': true }; try { const htmlContent = UrlFetchApp.fetch(searchUrl, params).getContentText(); const listHtmlMatch = htmlContent.match(/<ul class="jobs-search__results-list">([\s\S]*?)<\/ul>/); if (!listHtmlMatch) { console.error("CRITICAL FAILURE (Parse): Could not find job list container."); return; } const jobCards = listHtmlMatch[1].split('</li>'); const jobsToAdd = []; for (let card of jobCards) { const jobIdMatch = card.match(/data-entity-urn="urn:li:jobPosting:(\d+)"/); const titleMatch = card.match(/<h3 class="base-search-card__title">([\s\S]*?)<\/h3>/); if (jobIdMatch && titleMatch) { const uniqueId = `linkedin-${jobIdMatch[1]}`; const companyMatch = card.match(/<h4 class="base-search-card__subtitle">([\s\S]*?)<\/h4>/); const locationMatch = card.match(/<span class="job-search-card__location">([\s\S]*?)<\/span>/); const dateMatch = card.match(/<time class="job-search-card__listdate"[^>]*>([\s\S]*?)<\/time>/); const jobTitle = titleMatch[1].replace(/<[^>]*>/g, '').trim(); const company = companyMatch ? companyMatch[1].replace(/<[^>]*>/g, '').trim() : 'N/A'; const location = locationMatch ? locationMatch[1].replace(/<[^>]*>/g, '').trim() : 'N/A'; const datePosted = dateMatch ? dateMatch[1].replace(/<[^>]*>/g, '').trim() : 'N/A'; const cleanUrl = `https://www.linkedin.com/jobs/view/${jobIdMatch[1]}`; const linkFormula = `=HYPERLINK("${cleanUrl}", "View Job")`; jobsToAdd.push([jobTitle, company, location, linkFormula, datePosted, uniqueId]); } } if (jobsToAdd.length > 0) { if (jobsSheet.getLastRow() > 1) { jobsSheet.getRange(2, 1, jobsSheet.getLastRow() - 1, 6).clearContent(); } jobsSheet.getRange(2, 1, jobsToAdd.length, 6).setValues(jobsToAdd); console.log(`SUCCESS! Wrote ${jobsToAdd.length} new jobs.`); } } catch (e) { console.error("FATAL ERROR during scraping process: " + e.stack); } }
+function getSessionUser() { try { const email = Session.getActiveUser().getEmail(); if (!email) return { isLoggedIn: false, email: "guest", isAdmin: false, name: "Guest" }; const usersSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Users"); const usersData = usersSheet.getRange(2, 1, usersSheet.getLastRow() > 1 ? usersSheet.getLastRow() - 1 : 1, 3).getValues(); for (let user of usersData) { if (user[0] && user[0].toLowerCase() === email.toLowerCase()) { return { isLoggedIn: true, email: user[0], name: user[1], isAdmin: user[2] && user[2].toLowerCase() === 'admin' }; } } usersSheet.appendRow([email, "New User", "User"]); return { isLoggedIn: true, email: email, name: "New User", isAdmin: false }; } catch (e) { return { isLoggedIn: false, email: "guest", isAdmin: false, name: "Guest" }; } }
+function getPageContent() { try { const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Content"); if (!sheet || sheet.getLastRow() < 2) return {}; const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 2).getValues(); const content = {}; for (let row of data) { if (row[0]) { content[row[0]] = row[1]; } } return content; } catch (e) { console.error("Error in getPageContent: " + e.stack); return {}; } }

@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <base target="_top">
+    <title><?= jobTitle ?> | Sebenzani.com</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root { --primary-color: #0a66c2; --card-background: #ffffff; --text-color: #2c3e50; --heading-font: 'Poppins', sans-serif; --body-font: 'Poppins', sans-serif; --card-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.1); }
+        body { font-family: var(--body-font); background: linear-gradient(120deg, #f3f2ef 0%, #ffffff 100%); color: var(--text-color); margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; min-height: 100vh; box-sizing: border-box; }
+        .job-card { background: var(--card-background); border-radius: 12px; box-shadow: var(--card-shadow); padding: 30px; width: 100%; max-width: 800px; border-top: 5px solid var(--primary-color); }
+        h1 { font-size: 2em; margin: 0 0 10px 0; }
+        .company { font-size: 1.2em; font-weight: 500; color: #555; margin-bottom: 20px; }
+        .metadata { display: flex; flex-wrap: wrap; gap: 20px; color: #777; font-size: 1em; margin-bottom: 25px; }
+        .view-button { background-image: linear-gradient(to right, #0a66c2 0%, #004182 100%); color: white; padding: 15px 30px; border-radius: 8px; text-decoration: none; display: inline-block; font-weight: 500; }
+        .back-link { display: block; text-align: center; margin-top: 30px; color: var(--primary-color); text-decoration: none; font-weight: 500; }
+    </style>
+</head>
+<body>
+    <div class="job-card">
+        <h1><?= jobTitle ?></h1>
+        <p class="company"><?= company ?></p>
+        <div class="metadata">
+            <span>📍 <?= location ?></span>
+            <span>📅 <?= datePosted ?></span>
+        </div>
+        <a href="<?= jobUrl ?>" target="_blank" class="view-button">Apply on LinkedIn</a>
+    </div>
+
+    <!-- This link now correctly points to your Google Site -->
+    <a href="<?= mainAppUrl ?>" target="_top" class="back-link">← Back to All Jobs</a>
+</body>
+</html>

@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <base target="_top">
+    <title>Sebenzani.com</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root{--primary-color:#0a66c2;--secondary-color:#004182;--background-gradient:linear-gradient(120deg, #f3f2ef 0%, #ffffff 100%);--card-background:#ffffff;--text-color:#2c3e50;--heading-font:'Poppins', sans-serif;--body-font:'Poppins', sans-serif;--card-shadow:0 8px 32px 0 rgba(0, 0, 0, 0.1);}
+        html{scroll-behavior:smooth;}
+        body{font-family:var(--body-font);background:var(--background-gradient);color:var(--text-color);margin:0;padding:0;line-height:1.6;}
+        .container{max-width:900px;margin:40px auto;padding:0 20px;}
+        header{background-color:var(--card-background);backdrop-filter:blur(10px);padding:15px 40px;box-shadow:0 2px 10px rgba(0,0,0,0.05);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:1000;border-bottom:1px solid rgba(0,0,0,0.05);}
+        .logo{font-family:var(--heading-font);font-size:1.8em;font-weight:700;color:var(--primary-color);}
+        nav a{margin:0 15px;text-decoration:none;color:#555;font-weight:500;cursor:pointer;padding-bottom:5px;position:relative;}
+        nav a::after{content:'';position:absolute;width:0;height:2px;bottom:0;left:0;background-color:var(--primary-color);transition:width 0.3s ease;}
+        nav a:hover::after,nav a.active::after{width:100%;}
+        .auth-section a{text-decoration:none;color:var(--primary-color);font-weight:700;}
+        .auth-section .user-name{margin-right:15px;color:#444;font-weight:500;}
+        .page-content{display:none;}.page-content.active{display:block;}
+        .content-section{background:var(--card-background);padding:40px;border-radius:12px;margin-top:20px;box-shadow:var(--card-shadow);}
+        .controls-container{background:var(--card-background);padding:20px;border-radius:12px;box-shadow:var(--card-shadow);margin-bottom:30px;display:flex;align-items:center;gap:20px;}
+        .search-wrapper{flex-grow:1;position:relative;min-width:0;}
+        #search-input{width:100%;padding:15px;border:1px solid #ddd;border-radius:8px;font-size:1em;box-sizing:border-box;}
+        #job-count{font-weight:500;color:#777;white-space:nowrap;flex-shrink:0;}
+        .job-card{background:var(--card-background);border-radius:12px;box-shadow:var(--card-shadow);padding:25px;margin-bottom:20px;transition:all 0.3s ease;border:1px solid rgba(0,0,0,0.05);opacity:0;animation:fadeIn 0.5s ease forwards;}
+        @keyframes fadeIn{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);}}
+        .view-button,.share-button{color:white;padding:12px 25px;border-radius:8px;text-decoration:none;display:inline-flex;align-items:center;gap:8px;font-weight:500;border:none;cursor:pointer;transition:all 0.2s ease;}
+        .view-button{background-image:linear-gradient(to right, #0a66c2 0%, #004182 100%);}
+        .share-button{background-color:#555;}
+        
+        /* --- NEW: Styles for the "Show and Select" feature --- */
+        .share-container { margin-top: 15px; max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out; }
+        .share-input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 0.9em; box-sizing: border-box; }
+
+        #initial-spinner-container{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(255, 255, 255, 0.8);display:flex;justify-content:center;align-items:center;z-index:9999;}
+        .spinner{border:6px solid #f3f3f3;border-top:6px solid var(--primary-color);border-radius:50%;width:50px;height:50px;animation:spin 1s linear infinite;}
+        @keyframes spin{0%{transform:rotate(0deg);}100%{transform:rotate(360deg);}}
+        @keyframes themed-shimmer{0%{background-position:-800px 0;}100%{background-position:800px 0;}}
+        .skeleton-card{background:#fff;border-radius:12px;box-shadow:var(--card-shadow);padding:25px;margin-bottom:20px;}
+        .skeleton-line{height:20px;border-radius:4px;background-color:#e0e9f2;background-image:linear-gradient(to right, #e0e9f2 0%, #b3cde6 20%, #e0e9f2 40%, #e0e9f2 100%);}
+        #load-more-btn{background-color:var(--primary-color);color:white;border:none;padding:15px 30px;font-size:1em;font-weight:500;border-radius:8px;cursor:pointer;}
+        #load-more-btn:disabled{background-color:#ccc;}
+    </style>
+</head>
+<body>
+    <div id="initial-spinner-container"><div class="spinner"></div></div>
+    <header><!-- Unchanged --></header>
+    <div class="container" id="main-container"><!-- Unchanged --></div>
+    <script>
+        let ALL_JOBS = [];
+        let USER_DATA = {};
+        let currentJobOffset = 0; 
+        let WEB_APP_URL = ''; 
+
+        document.addEventListener("DOMContentLoaded", function() {
+            google.script.run.withSuccessHandler(initialize).getInitialData();
+            google.script.run.withSuccessHandler(url => { 
+                WEB_APP_URL = url.split('?')[0]; 
+            }).getWebAppUrl();
+        });
+
+        // FINAL, ROBUST "Show and Select" shareJob function
+        let activeShareTimeout = null; // Prevent multiple clicks from breaking the UI
+        function shareJob(buttonElement, jobId) {
+            if (!WEB_APP_URL || activeShareTimeout) { return; }
+
+            const card = buttonElement.closest('.job-card');
+            if (!card) return;
+
+            // Find the share container within this specific card
+            const shareContainer = card.querySelector('.share-container');
+            const shareInput = shareContainer.querySelector('.share-input');
+            const shareUrl = `${WEB_APP_URL}?job=${jobId}`;
+            
+            shareInput.value = shareUrl;
+            
+            // Show the container and select the text
+            shareContainer.style.maxHeight = '100px'; // Animate open
+            shareInput.select();
+            shareInput.setSelectionRange(0, 99999); // For mobile browsers
+
+            const originalText = buttonElement.textContent;
+            buttonElement.textContent = 'Press Ctrl+C to Copy';
+            
+            activeShareTimeout = setTimeout(() => {
+                buttonElement.textContent = originalText;
+                shareContainer.style.maxHeight = '0'; // Animate closed
+                activeShareTimeout = null;
+            }, 4000); // Revert after 4 seconds
+        }
+        
+        function createJobCard(job, index) {
+            if (!job || job.length < 6) return null;
+            const [title, company, location, linkFormula, datePosted, jobId] = job;
+            let url = '#';
+            if (linkFormula) { const urlMatch = linkFormula.match(/=HYPERLINK\("([^"]+)"/); if (urlMatch) url = urlMatch[1]; }
+            const card = document.createElement('div');
+            card.className = 'job-card';
+            card.id = `job-${jobId}`;
+            card.style.animationDelay = `${index * 0.05}s`;
+            // NEW: Added a container for the share input box
+            card.innerHTML = `
+                <h2>${title}</h2>
+                <p class="company">${company}</p>
+                <div class="metadata">
+                    <span>📍 ${location}</span>
+                    <span>📅 ${datePosted}</span>
+                </div>
+                <div style="margin-top:20px; display:flex; gap:15px;">
+                    <a href="${url}" target="_blank" class="view-button">View on LinkedIn</a>
+                    <button class="share-button" onclick="shareJob(this, '${jobId}')">Share</button>
+                </div>
+                <div class="share-container">
+                    <input type="text" class="share-input" readonly>
+                </div>
+            `;
+            return card;
+        }
+
+        // All other functions are unchanged. Condensed for brevity.
+        const headerHTML = '<div class="logo">Sebenzani.com</div><nav><a href="#jobs" class="nav-link active" onclick="showPage(event, \'jobs\')">Jobs</a><a href="#about" class="nav-link" onclick="showPage(event, \'about\')">About Us</a><a href="#contact" class="nav-link" onclick="showPage(event, \'contact\')">Contact Us</a></nav><div class="auth-section"></div>'; document.querySelector('header').innerHTML = headerHTML; const containerHTML = '<div id="jobs" class="page-content active"><div class="controls-container"><div class="search-wrapper"><input type="text" id="search-input" placeholder="Search by title, company, or location..." onkeyup="filterJobs()"></div><div id="job-count"></div></div><div id="job-listings-container"></div><div id="load-more-container" style="text-align: center; display: none;"><button id="load-more-btn" onclick="loadMoreJobs()">Load More Jobs</button></div></div><div id="about" class="page-content"></div><div id="contact" class="page-content"></div>'; document.querySelector('.container').innerHTML = containerHTML;
+        initialize = function(data) { document.getElementById('initial-spinner-container').style.display = 'none'; showSkeletons(); setTimeout(() => { if (!data) return; USER_DATA = data.user; ALL_JOBS = data.jobs; currentJobOffset = ALL_JOBS.length; renderAuthSection(); displayJobs(ALL_JOBS); displayContent(data.content); }, 750); };
+        showSkeletons = function(){const c=document.getElementById("job-listings-container");c.innerHTML="";for(let i=0;i<4;i++){const s=document.createElement("div");s.className="skeleton-card";s.innerHTML='<div class="skeleton-line title"></div><div class="skeleton-line company"></div><div class="skeleton-line meta"></div>';c.appendChild(s)}};
+        displayJobs = function(j){const c=document.getElementById("job-listings-container");c.innerHTML="";document.getElementById("job-count").textContent=`${j.length} jobs shown`;if(!j||j.length===0){c.innerHTML='<div class="empty-state" style="text-align:center; padding: 40px;"><h3>No jobs found.</h3></div>';return}j.forEach((b,i)=>{const a=createJobCard(b,i);if(a)c.appendChild(a)});const l=document.getElementById("load-more-container"),b=document.getElementById("load-more-btn");b.textContent="Load More Jobs";b.disabled=!1;if(!USER_DATA.isLoggedIn&&j.length>0&&j.length%5===0)l.style.display="block";else l.style.display="none"};
+        loadMoreJobs = function(){const b=document.getElementById("load-more-btn");b.textContent="Loading...";b.disabled=!0;google.script.run.withSuccessHandler(function(n){if(n&&n.length>0){appendNewJobs(n);currentJobOffset+=n.length;b.textContent="Load More Jobs";b.disabled=!1;if(n.length<5){b.textContent="End of Listings";b.disabled=!0}}else{b.textContent="End of Listings";b.disabled=!0}}).getMoreJobs(currentJobOffset)};
+        appendNewJobs = function(j){const c=document.getElementById("job-listings-container");j.forEach((b,i)=>{const a=createJobCard(b,i);if(a)c.appendChild(a)});const n=document.querySelectorAll(".job-card").length;document.getElementById("job-count").textContent=`${n} jobs shown`};
+        filterJobs = function(){const s=document.getElementById("search-input").value.toLowerCase();document.getElementById("load-more-container").style.display="none";if(!s){document.querySelectorAll(".job-card").forEach(c=>c.style.display="block");const n=document.querySelectorAll(".job-card").length;document.getElementById("job-count").textContent=`${n} jobs shown`;if(!USER_DATA.isLoggedIn)document.getElementById("load-more-container").style.display="block";return}if(USER_DATA.isLoggedIn){const f=ALL_JOBS.filter(j=>(j[0]||"").toLowerCase().includes(s)||(j[1]||"").toLowerCase().includes(s)||(j[2]||"").toLowerCase().includes(s));displayFilteredResults(f)}else{const c=document.querySelectorAll(".job-card");let n=0;c.forEach(a=>{const t=(a.querySelector("h2").textContent||"").toLowerCase(),o=(a.querySelector("p.company").textContent||"").toLowerCase();if(t.includes(s)||o.includes(s)){a.style.display="block";n++}else a.style.display="none"});document.getElementById("job-count").textContent=`${n} jobs found`}};
+        displayFilteredResults = function(f){const c=document.getElementById("job-listings-container");c.innerHTML="";document.getElementById("job-count").textContent=`${f.length} jobs found`;if(f.length===0)c.innerHTML='<div class="empty-state" style="text-align:center; padding: 40px;"><h3>No matching jobs found.</h3></div>';else f.forEach((j,i)=>{const a=createJobCard(j,i);if(a)c.appendChild(a)})};
+        showPage = function(e,p){if(e)e.preventDefault();if(!p)p="jobs";document.querySelectorAll(".page-content").forEach(c=>c.classList.remove("active"));const n=document.getElementById(p);if(n)n.classList.add("active");document.querySelectorAll(".nav-link").forEach(l=>l.classList.remove("active"));const a=document.querySelector(`nav a[href="#${p}"]`);if(a)a.classList.add("active")};
+        displayContent = function(c){const a=document.getElementById("about"),o=document.getElementById("contact");if(a)a.innerHTML=`<div class="content-section"><h1>About Us</h1><h2>Who We Are?</h2><p>${c.about_who_we_are||"Content not found."}</p><h2>What We Do?</h2><p>${c.about_what_we_do||"Content not found."}</p><h2>Our Mission</h2><p>${c.about_our_mission||"Content not found."}</p></div>`;if(o)o.innerHTML=`<div class="content-section"><h1>Contact Us</h1><p><strong>Phone:</strong> <span>${c.contact_phone||"N/A"}</span></p><p><strong>Email:</strong> <span>${c.contact_email||"N/A"}</span></p></div>`};
+        renderAuthSection = function(){const a=document.querySelector(".auth-section");if(USER_DATA.isLoggedIn)a.innerHTML=`<span class="user-name">Welcome, ${USER_DATA.name.split(" ")[0]}</span>`;else google.script.run.withSuccessHandler(s=>a.innerHTML=`<a href="${s}" target="_top">Sign In / Sign Up</a>`).getWebAppUrl()};
+    </script>
+</body>
+</html>
